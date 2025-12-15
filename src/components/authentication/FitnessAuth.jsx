@@ -1,5 +1,20 @@
 import React, { useState } from 'react';
 import { User, Mail, Lock, Phone, Dumbbell, ArrowRight, Check } from 'lucide-react';
+import useAuthStore from '../../store/authStore';
+import axiosClient from '../../api/axiosClient';
+
+import { useNavigate } from 'react-router-dom';
+
+// API helpers using your DRF + SimpleJWT setup
+async function loginApi(payload) {
+    const res = await axiosClient.post('/token/', payload);
+    return res.data;
+}
+
+async function registerApi(payload) {
+    const res = await axiosClient.post('/register/', payload);
+    return res.data;
+}
 
 const FitnessAuth = () => {
     const [isLogin, setIsLogin] = useState(true);
@@ -9,10 +24,13 @@ const FitnessAuth = () => {
         full_name: '',
         phone_number: '',
         role: 'client',
-        confirmPassword: ''
+        confirmPassword: '',
     });
     const [errors, setErrors] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const loginStore = useAuthStore(state => state.login);
+    const navigate = useNavigate();
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -50,19 +68,101 @@ const FitnessAuth = () => {
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-
         if (!validateForm()) return;
 
         setIsSubmitting(true);
+        setErrors(prev => ({ ...prev, form: '' }));
 
-        // Simulate API call
-        setTimeout(() => {
-            console.log('Form submitted:', formData);
+        try {
+            if (isLogin) {
+                // LOGIN
+                const payload = {
+                    email: formData.email,
+                    password: formData.password,
+                };
+
+                const data = await loginApi(payload);
+                // { access, refresh, user, detail }
+                loginStore({
+                    user: data.user,
+                    role: data.user.role,
+                    accessToken: data.access,
+                });
+
+                localStorage.setItem('accessToken', data.access);
+                localStorage.setItem('refreshToken', data.refresh);
+                // go to homepage after login
+                navigate('/', { replace: true });
+
+                alert('Login successful.');
+            } else {
+                // REGISTER
+                const payload = {
+                    full_name: formData.full_name,
+                    email: formData.email,
+                    phone_number: formData.phone_number || '',
+                    password: formData.password,
+                    password2: formData.confirmPassword,
+                    role: formData.role,
+                };
+
+                const data = await registerApi(payload);
+                alert(
+                    data?.message ||
+                    'Registration successful! Please check your email to verify your account.'
+                );
+
+                setIsLogin(true);
+                setFormData({
+                    email: formData.email,
+                    password: '',
+                    full_name: '',
+                    phone_number: '',
+                    role: 'client',
+                    confirmPassword: '',
+                });
+                setErrors({});
+            }
+        } catch (err) {
+            if (err.response?.data) {
+                const data = err.response.data;
+                const fieldErrors = {};
+
+                if (typeof data === 'object') {
+                    Object.entries(data).forEach(([key, value]) => {
+                        if (Array.isArray(value)) {
+                            fieldErrors[key] = value.join(' ');
+                        } else if (typeof value === 'string') {
+                            // typical DRF error shape: {"detail": "..."} or {"password": ["..."]}
+                            if (key === 'detail' || key === 'message') {
+                                fieldErrors.form = value;
+                            } else {
+                                fieldErrors[key] = value;
+                            }
+                        }
+                    });
+                }
+
+                setErrors(prev => ({
+                    ...prev,
+                    ...fieldErrors,
+                    form:
+                        fieldErrors.form ||
+                        data.detail ||
+                        data.message ||
+                        'Something went wrong.',
+                }));
+            } else {
+                setErrors(prev => ({
+                    ...prev,
+                    form: 'Network error. Please try again.',
+                }));
+            }
+        } finally {
             setIsSubmitting(false);
-            alert(isLogin ? 'Login successful!' : 'Registration successful! Check your email for verification.');
-        }, 1500);
+        }
     };
 
     const switchMode = () => {
@@ -73,21 +173,20 @@ const FitnessAuth = () => {
             full_name: '',
             phone_number: '',
             role: 'client',
-            confirmPassword: ''
+            confirmPassword: '',
         });
         setErrors({});
     };
 
     return (
         <div className="min-h-screen w-full bg-slate-950 text-white">
-            {/* Hero background */}
             <div className="relative min-h-screen flex items-center justify-center px-4">
                 {/* Background image */}
                 <div
                     className="absolute inset-0 bg-cover bg-center"
                     style={{
                         backgroundImage:
-                            "url('https://i0.wp.com/www.strengthlog.com/wp-content/uploads/2023/02/The-most-popular-exercises-for-men-and-women.jpg?fit=2061%2C1376&ssl=1')"
+                            "url('https://i0.wp.com/www.strengthlog.com/wp-content/uploads/2023/02/The-most-popular-exercises-for-men-and-women.jpg?fit=2061%2C1376&ssl=1')",
                     }}
                 />
                 {/* Overlay gradient */}
@@ -107,7 +206,8 @@ const FitnessAuth = () => {
                             platform
                         </h1>
                         <p className="text-slate-300 text-sm md:text-base">
-                            Connect with certified trainers, follow custom workout plans, and track your progress from any device.
+                            Connect with certified trainers, follow custom workout plans, and
+                            track your progress from any device.
                         </p>
                         <ul className="text-sm md:text-base text-slate-200 space-y-1">
                             <li className="flex items-center justify-center lg:justify-start gap-2">
@@ -168,6 +268,10 @@ const FitnessAuth = () => {
 
                             {/* Form */}
                             <form onSubmit={handleSubmit} className="p-7 space-y-5">
+                                {errors.form && (
+                                    <p className="text-xs text-red-400 mb-1">{errors.form}</p>
+                                )}
+
                                 {/* Full Name - Register Only */}
                                 {!isLogin && (
                                     <div>
@@ -182,13 +286,17 @@ const FitnessAuth = () => {
                                                 value={formData.full_name}
                                                 onChange={handleChange}
                                                 className={`w-full pl-11 pr-4 py-3 bg-slate-950/70 border ${
-                                                    errors.full_name ? 'border-red-500' : 'border-slate-700'
+                                                    errors.full_name
+                                                        ? 'border-red-500'
+                                                        : 'border-slate-700'
                                                 } rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 transition-all`}
                                                 placeholder="John Doe"
                                             />
                                         </div>
                                         {errors.full_name && (
-                                            <p className="mt-1 text-xs text-red-400">{errors.full_name}</p>
+                                            <p className="mt-1 text-xs text-red-400">
+                                                {errors.full_name}
+                                            </p>
                                         )}
                                     </div>
                                 )}
@@ -212,7 +320,9 @@ const FitnessAuth = () => {
                                         />
                                     </div>
                                     {errors.email && (
-                                        <p className="mt-1 text-xs text-red-400">{errors.email}</p>
+                                        <p className="mt-1 text-xs text-red-400">
+                                            {errors.email}
+                                        </p>
                                     )}
                                 </div>
 
@@ -220,7 +330,8 @@ const FitnessAuth = () => {
                                 {!isLogin && (
                                     <div>
                                         <label className="block text-sm font-medium text-slate-200 mb-2">
-                                            Phone Number <span className="text-slate-500">(Optional)</span>
+                                            Phone Number{' '}
+                                            <span className="text-slate-500">(Optional)</span>
                                         </label>
                                         <div className="relative">
                                             <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -296,13 +407,17 @@ const FitnessAuth = () => {
                                             value={formData.password}
                                             onChange={handleChange}
                                             className={`w-full pl-11 pr-4 py-3 bg-slate-950/70 border ${
-                                                errors.password ? 'border-red-500' : 'border-slate-700'
+                                                errors.password
+                                                    ? 'border-red-500'
+                                                    : 'border-slate-700'
                                             } rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 transition-all`}
                                             placeholder="••••••••"
                                         />
                                     </div>
                                     {errors.password && (
-                                        <p className="mt-1 text-xs text-red-400">{errors.password}</p>
+                                        <p className="mt-1 text-xs text-red-400">
+                                            {errors.password}
+                                        </p>
                                     )}
                                 </div>
 
@@ -320,7 +435,9 @@ const FitnessAuth = () => {
                                                 value={formData.confirmPassword}
                                                 onChange={handleChange}
                                                 className={`w-full pl-11 pr-4 py-3 bg-slate-950/70 border ${
-                                                    errors.confirmPassword ? 'border-red-500' : 'border-slate-700'
+                                                    errors.confirmPassword
+                                                        ? 'border-red-500'
+                                                        : 'border-slate-700'
                                                 } rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 transition-all`}
                                                 placeholder="••••••••"
                                             />
@@ -351,13 +468,13 @@ const FitnessAuth = () => {
                                     disabled={isSubmitting}
                                     className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white py-3 rounded-xl text-sm font-semibold hover:from-emerald-600 hover:to-teal-600 focus:outline-none focus:ring-4 focus:ring-emerald-400/30 transition-all shadow-lg shadow-emerald-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                                 >
-                                    <span>
-                                        {isSubmitting
-                                            ? 'Processing...'
-                                            : isLogin
-                                                ? 'Login'
-                                                : 'Create Account'}
-                                    </span>
+                  <span>
+                    {isSubmitting
+                        ? 'Processing...'
+                        : isLogin
+                            ? 'Login'
+                            : 'Create Account'}
+                  </span>
                                     {!isSubmitting && <ArrowRight className="w-5 h-5" />}
                                 </button>
                             </form>
