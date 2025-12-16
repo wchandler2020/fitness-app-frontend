@@ -2,14 +2,14 @@
 import './App.css';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import FitnessAuth from './components/authentication/FitnessAuth';
-import HomePage from './components/home/HomePage';
+import ClientDashboard from './components/home/dashboard/ClientDashboard'
 
 function App() {
     return (
         <BrowserRouter>
             <Routes>
                 {/* Home */}
-                <Route path="/" element={<HomePage />} />
+                <Route path="/" element={<ClientDashboard />} />
 
                 {/* Auth (login/register) */}
                 <Route path="/auth" element={<FitnessAuth />} />
