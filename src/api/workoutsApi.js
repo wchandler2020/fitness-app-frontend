@@ -82,3 +82,18 @@ export async function getPersonalRecordsApi(exerciseId = null) {
     const res = await axiosClient.get('/workouts/personal-records/', { params });
     return res.data;
 }
+
+// ==================== AI WORKOUT GENERATION ====================
+
+export async function generateAIWorkoutApi(preferences) {
+    const res = await axiosClient.post('/ai/generate/', preferences);
+    return res.data;
+}
+
+export async function saveAIWorkoutApi(workoutPlan, workoutDate = null) {
+    const res = await axiosClient.post('/ai/save/', {
+        workout_plan: workoutPlan,
+        workout_date: workoutDate || new Date().toISOString().split('T')[0]
+    });
+    return res.data;
+}

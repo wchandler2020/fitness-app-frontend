@@ -1,15 +1,34 @@
-import {create} from 'zustand';
+// store/authStore.js
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
-const useAuthStore = create((set) => ({
-    user: null,
-    role: null, // 'client' || 'trainer' || 'admin'
-    accessToken: null,
-    isAuthLoading: false,
+const useAuthStore = create(
+    persist(
+        (set) => ({
+            user: null,
+            accessToken: null,
+            refreshToken: null,
 
-    setAuthLoading: (value) => set({isAuthLoading: value}),
-    login: ({ user, role, accessToken }) =>
-        set({user, role, accessToken}),
-    logout: () => set({user: null, role: null, accessToken: null}),
-}))
+            setUser: (user) => set({ user }),
+            setTokens: (accessToken, refreshToken) => set({ accessToken, refreshToken }),
+            
+            // ADD THIS
+            logout: () => set({ 
+                user: null, 
+                accessToken: null, 
+                refreshToken: null 
+            }),
 
-export default  useAuthStore;
+            login: (user, accessToken, refreshToken) => set({
+                user,
+                accessToken,
+                refreshToken,
+            }),
+        }),
+        {
+            name: 'auth-storage',
+        }
+    )
+);
+
+export default useAuthStore;
